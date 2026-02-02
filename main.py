@@ -9,35 +9,66 @@ greenPortal = API.GreenApi(os.getenv("ID_INSTANCE"), os.getenv("API_TOKEN"))
 user_states = {}
 
 
+def get_main_menu():
+    return (
+        "Вас приветствует Центр Наук и Искусств!\n"
+        "Выберите, пожалуйста, интересующее направление (введите цифру):\n"
+        "1 — Рисование, живопись, мастер-классы\n"
+        "2 — Подготовка к ОРТ\n"
+        "3 — Языковые курсы (English, Deutsch, и др.)\n"
+        "4 — Математика, физика, биология, химия\n"
+        "5 — Айкидо"
+    )
+
+
 def get_bot_response(chat_id, text):
-    text = text.lower().strip()
-    state = user_states.get(chat_id, "START")
+    text = text.strip()
+    state = user_states.get(chat_id, "MAIN_MENU")
 
-    if state == "START":
-        user_states[chat_id] = "ASK_CATEGORY"
-        return ("Добрый день! Центр Сейталиев Арт / Центр наук и искусств. "
-                "Подскажите, пожалуйста, какой курс вас интересует: рисование, ОРТ или языковые курсы?")
+    if state == "MAIN_MENU":
+        if text == "1":
+            user_states[chat_id] = "ART_DETAILS"
+            return (
+                "🎨 Студия Сейталиев Арт предлагает:\n"
+                "- Эстетический курс (6-12 лет)\n"
+                "- Академический рисунок (база и для поступающих)\n"
+                "- Живопись и мастер-классы\n\n"
+                "Напишите 'да', чтобы мы перезвонили вам для записи на пробное занятие!"
+            )
+        elif text == "2":
+            user_states[chat_id] = "ORT_DETAILS"
+            return (
+                "📚 Подготовка к ОРТ (онлайн/оффлайн):\n"
+                "У нас есть 13 пакетов обучения (Математика, Родной язык, Физика, Биология, Химия).\n"
+                "Напишите 'инфо', чтобы получить список всех пакетов."
+            )
+        elif text == "3":
+            return (
+                "🌍 Языковые курсы:\n"
+                "Групповые и индивидуальные занятия по английскому, немецкому, русскому и кыргызскому языкам.\n"
+                "Оставьте сообщение, и мы перезвоним вам!"
+            )
+        elif text == "4":
+            return (
+                "📐 Предметные курсы:\n"
+                "Подтянем знания по математике, физике, химии и биологии.\n"
+                "Наши педагоги помогут добиться лучших результатов."
+            )
+        elif text == "5":
+            return (
+                "🥋 Федерация Айкидо КР:\n"
+                "Тренировки для детей и взрослых. Наши залы находятся по всему городу.\n"
+                "Напишите нам, и мы подберем ближайший зал!"
+            )
+        else:
+            return get_main_menu()
 
-    if state == "ASK_CATEGORY":
-        user_states[chat_id] = "ASK_AGE"
-        return "Подскажите, пожалуйста, вы ищете курс для ребёнка или для взрослого? У нас есть разные программы."
-
-    if state == "ASK_AGE":
-        user_states[chat_id] = "OFFER_TRIAL"
-        info = ("У нас работают профессиональные художники с академическим образованием и большим опытом. "
-                "Мы предлагаем академический рисунок, живопись и эстетические курсы для развития вкуса. ")
-        invitation = "Вы можете подойти в нашу студию, посмотреть обстановку и пройти пробное занятие. Когда вам было бы удобно?"
-        return f"{info}\n\n{invitation}"
-
-    if state == "OFFER_TRIAL":
-        user_states[chat_id] = "START"
-        return "Отлично! Я передаю ваш контакт старшему администратору, он свяжется с вами для подтверждения времени."
-
-    return "Подскажите, пожалуйста, какой курс вас интересует?"
+    user_states[chat_id] = "MAIN_MENU"
+    return "Благодарим за интерес! Чтобы вернуться в меню, напишите любой текст."
 
 
 def main():
-    print("Бот-менеджер запущен...")
+    print("Бот-Центр запущен...")
     while True:
         receive_result = greenPortal.receiving.receiveNotification()
         if receive_result.data:
@@ -46,13 +77,14 @@ def main():
 
             if body.get("typeWebhook") in ["incomingMessageReceived", "incomingBusinessMessageReceived"]:
                 chat_id = body.get("senderData", {}).get("chatId")
-                text = body.get("messageData", {}).get("textMessageData", {}).get("textMessage") or \
-                       body.get("messageData", {}).get("extendedTextMessageData", {}).get("text")
+                message_data = body.get("messageData", {})
+                text = (message_data.get("textMessageData", {}).get("textMessage") or
+                        message_data.get("extendedTextMessageData", {}).get("text"))
 
                 if text:
-                    print(f"Клиент {chat_id}: {text}")
-                    answer = get_bot_response(chat_id, text)
-                    greenPortal.sending.sendMessage(chat_id, answer)
+                    print(f"Запрос от {chat_id}: {text}")
+                    response = get_bot_response(chat_id, text)
+                    greenPortal.sending.sendMessage(chat_id, response)
 
             greenPortal.receiving.deleteNotification(notification.get("receiptId"))
 
