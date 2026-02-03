@@ -1,70 +1,69 @@
 import os
+from datetime import datetime
 
+import gspread
 from dotenv import load_dotenv
+from oauth2client.service_account import ServiceAccountCredentials
 from whatsapp_api_client_python import API
 
 load_dotenv()
-greenPortal = API.GreenApi(os.getenv("ID_INSTANCE"), os.getenv("API_TOKEN"))
 
+ID_INSTANCE = os.getenv("ID_INSTANCE")
+API_TOKEN = os.getenv("API_TOKEN")
+
+greenPortal = API.GreenApi(ID_INSTANCE, API_TOKEN)
 user_states = {}
 
 
-def get_main_menu():
-    return (
-        "Вас приветствует Центр Наук и Искусств!\n"
-        "Выберите, пожалуйста, интересующее направление (введите цифру):\n"
-        "1 — Рисование, живопись, мастер-классы\n"
-        "2 — Подготовка к ОРТ\n"
-        "3 — Языковые курсы (English, Deutsch, и др.)\n"
-        "4 — Математика, физика, биология, химия\n"
-        "5 — Айкидо"
-    )
+def save_to_google_sheets(data):
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+        client = gspread.authorize(creds)
+        sheet = client.open("Заявки Бот").sheet1
+        sheet.append_row(data)
+    except Exception as e:
+        print(f"Ошибка сохранения в таблицу: {e}")
 
 
 def get_bot_response(chat_id, text):
-    text = text.strip()
-    state = user_states.get(chat_id, "MAIN_MENU")
+    state_data = user_states.get(chat_id, {"step": "START"})
+    step = state_data["step"]
+    text_lower = text.strip().lower()
 
-    if state == "MAIN_MENU":
-        if text == "1":
-            user_states[chat_id] = "ART_DETAILS"
-            return (
-                "🎨 Студия Сейталиев Арт предлагает:\n"
-                "- Эстетический курс (6-12 лет)\n"
-                "- Академический рисунок (база и для поступающих)\n"
-                "- Живопись и мастер-классы\n\n"
-                "Напишите 'да', чтобы мы перезвонили вам для записи на пробное занятие!"
-            )
-        elif text == "2":
-            user_states[chat_id] = "ORT_DETAILS"
-            return (
-                "📚 Подготовка к ОРТ (онлайн/оффлайн):\n"
-                "У нас есть 13 пакетов обучения (Математика, Родной язык, Физика, Биология, Химия).\n"
-                "Напишите 'инфо', чтобы получить список всех пакетов."
-            )
-        elif text == "3":
-            return (
-                "🌍 Языковые курсы:\n"
-                "Групповые и индивидуальные занятия по английскому, немецкому, русскому и кыргызскому языкам.\n"
-                "Оставьте сообщение, и мы перезвоним вам!"
-            )
-        elif text == "4":
-            return (
-                "📐 Предметные курсы:\n"
-                "Подтянем знания по математике, физике, химии и биологии.\n"
-                "Наши педагоги помогут добиться лучших результатов."
-            )
-        elif text == "5":
-            return (
-                "🥋 Федерация Айкидо КР:\n"
-                "Тренировки для детей и взрослых. Наши залы находятся по всему городу.\n"
-                "Напишите нам, и мы подберем ближайший зал!"
-            )
-        else:
-            return get_main_menu()
+    if step == "START":
+        user_states[chat_id] = {"step": "ASK_NAME"}
+        return ("Вас приветствует Центр Наук и Искусств!\n"
+                "Подскажите, как мы можем к вам обращаться? (Введите ваше ФИО) ")
 
-    user_states[chat_id] = "MAIN_MENU"
-    return "Благодарим за интерес! Чтобы вернуться в меню, напишите любой текст."
+    elif step == "ASK_NAME":
+        user_states[chat_id].update({"step": "ASK_PHONE", "name": text})
+        return f"Приятно познакомиться, {text}! Теперь введите ваш номер телефона для связи. "
+
+    elif step == "ASK_PHONE":
+        user_states[chat_id].update({"step": "ASK_SERVICE", "phone": text})
+        return ("Выберите интересующую услугу (введите цифру):\n"
+                "1 — Рисование\n2 — ОРТ\n3 — Языки\n"
+                "4 — Предметы\n5 — Айкидо")
+
+    elif step == "ASK_SERVICE":
+        services = {"1": "Рисование", "2": "ОРТ", "3": "Языки", "4": "Предметы", "5": "Айкидо"}
+        service = services.get(text, "Другое")
+
+        user_data = user_states[chat_id]
+        row = [
+            datetime.now().strftime("%d.%m.%Y %H:%M"),  # Дата
+            "WhatsApp",
+            user_data["name"],
+            user_data["phone"],
+            service
+        ]
+        save_to_google_sheets(row)
+
+        user_states[chat_id] = {"step": "START"}
+        return "Спасибо! Ваша заявка принята. Менеджер свяжется с вами в ближайшее время."
+
+    return "Пожалуйста, следуйте инструкциям бота."
 
 
 def main():
