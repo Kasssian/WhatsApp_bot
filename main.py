@@ -13,6 +13,7 @@ load_dotenv()
 TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_ID = os.getenv("PHONE_NUMBER_ID")
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1mYOoN2ni9agEdAMogONUw9gn59xqVhaCJwcwkfOasP4/edit"
 
 app = Flask(__name__)
 user_states = {}
@@ -66,11 +67,12 @@ def save_to_google_sheets(data_list):
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
         client = gspread.authorize(creds)
-        sheet = client.open("Заявки Бот").sheet1
+        sheet_url = "https://docs.google.com/spreadsheets/d/1mYOoN2ni9agEdAMogONUw9gn59xqVhaCJwcwkfOasP4/edit"
+        sheet = client.open_by_url(sheet_url).sheet1
         sheet.append_row(data_list)
         print("Сохранено в Google Таблицу")
     except Exception as e:
-        print(f"Ошибка Google Sheets (проверь доступ и файл json): {e}")
+        print(f"Ошибка Google Sheets: {e}")
 
 
 def send_message(to_number, text):
@@ -82,7 +84,11 @@ def send_message(to_number, text):
         "type": "text",
         "text": {"body": text}
     }
-    requests.post(url, json=data, headers=headers)
+    response = requests.post(url, json=data, headers=headers)
+    if response.status_code != 200:
+        print(f"ОШИБКА ОТПРАВКИ: {response.text}")
+    else:
+        print(f"Ответ отправлен: {text}")
 
 
 def get_bot_response(chat_id, text):
