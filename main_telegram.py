@@ -50,5 +50,5 @@ def get_service(message):
 
 
 if __name__ == "__main__":
-    print("🚀 Telegram бот запущен...")
+    print("----- Telegram бот запущен... -----")
     bot.polling(none_stop=True)

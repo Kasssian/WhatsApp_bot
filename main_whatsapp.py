@@ -78,5 +78,5 @@ def webhook():
 
 
 if __name__ == "__main__":
-    print("🚀 WhatsApp сервер запущен...")
+    print("----- WhatsApp сервер запущен... -----")
     app.run(port=5000)

@@ -48,9 +48,9 @@ def save_data(platform, name, phone, service):
         cursor.execute("INSERT INTO requests (date, platform, name, phone, service) VALUES (?, ?, ?, ?, ?)", row_data)
         conn.commit()
         conn.close()
-        print(f"✅ [{platform}] Сохранено в БД: {name}")
+        print(f"----- [{platform}] Сохранено в БД: {name} -----")
     except Exception as e:
-        print(f"❌ Ошибка БД: {e}")
+        print(f"----- Ошибка БД: {e} -----")
 
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
