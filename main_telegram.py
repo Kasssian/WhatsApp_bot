@@ -43,7 +43,6 @@ def get_service(message):
     if user_data:
         bot.send_message(message.chat.id, "Спасибо! Заявка принята.", reply_markup=types.ReplyKeyboardRemove())
 
-        # Сохраняем через общий файл database.py
         save_data("Telegram", user_data['name'], user_data['phone'], service)
     else:
         bot.send_message(message.chat.id, "Ошибка. Нажмите /start")
