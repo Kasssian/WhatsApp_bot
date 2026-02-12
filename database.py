@@ -1,11 +1,19 @@
+import os
 import sqlite3
 from datetime import datetime
 
 import gspread
+import requests
+from dotenv import load_dotenv
 from oauth2client.service_account import ServiceAccountCredentials
+
+load_dotenv()
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1mYOoN2ni9agEdAMogONUw9gn59xqVhaCJwcwkfOasP4/edit"
 JSON_KEYITILE = "service_account.json"
+
+TG_TOKEN = os.getenv("TELEGRAM_TOKEN")
+ADMIN_ID = os.getenv("ADMIN_ID")
 
 
 def init_db():
@@ -14,21 +22,12 @@ def init_db():
     cursor.execute('''
                    CREATE TABLE IF NOT EXISTS requests
                    (
-                       id
-                           INTEGER
-                           PRIMARY
-                               KEY
-                           AUTOINCREMENT,
-                       date
-                           TEXT,
-                       platform
-                           TEXT,
-                       name
-                           TEXT,
-                       phone
-                           TEXT,
-                       service
-                           TEXT
+                       id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                       date     TEXT,
+                       platform TEXT,
+                       name     TEXT,
+                       phone    TEXT,
+                       service  TEXT
                    )
                    ''')
     conn.commit()
@@ -36,6 +35,33 @@ def init_db():
 
 
 init_db()
+
+
+def send_admin_alert(platform, name, phone, service):
+    if not TG_TOKEN or not ADMIN_ID:
+        print("Не настроен ADMIN_ID или Token, уведомление не отправлено.")
+        return
+
+    text = (
+        f"<b>НОВАЯ ЗАЯВКА!</b>\n\n"
+        f"<b>Имя:</b> {name}\n"
+        f"<b>Телефон:</b> {phone}\n"
+        f"<b>Услуга:</b> {service}\n"
+        f"<b>Источник:</b> {platform}"
+    )
+
+    url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+    data = {
+        "chat_id": ADMIN_ID,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+
+    try:
+        requests.post(url, json=data)
+        print("Уведомление админу отправлено")
+    except Exception as e:
+        print(f"Ошибка отправки уведомления: {e}")
 
 
 def save_data(platform, name, phone, service):
@@ -48,9 +74,9 @@ def save_data(platform, name, phone, service):
         cursor.execute("INSERT INTO requests (date, platform, name, phone, service) VALUES (?, ?, ?, ?, ?)", row_data)
         conn.commit()
         conn.close()
-        print(f"----- [{platform}] Сохранено в БД: {name} -----")
+        print(f"[{platform}] Сохранено в БД: {name}")
     except Exception as e:
-        print(f"----- Ошибка БД: {e} -----")
+        print(f"Ошибка БД: {e}")
 
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -59,6 +85,8 @@ def save_data(platform, name, phone, service):
 
         sheet = client.open_by_url(SHEET_URL).sheet1
         sheet.append_row(row_data)
-        print(f"✅ [{platform}] Сохранено в Google Sheets")
+        print(f"[{platform}] Сохранено в Google Sheets")
     except Exception as e:
-        print(f"❌ Ошибка Google Sheets: {e}")
+        print(f"Ошибка Google Sheets: {e}")
+
+    send_admin_alert(platform, name, phone, service)
