@@ -102,14 +102,27 @@ def service_info(call):
 
 def get_name(message):
     user_data[message.chat.id]["name"] = message.text
-    msg = bot.send_message(message.chat.id, "Отлично! Теперь напишите ваш номер телефона:")
+
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    contact_btn = types.KeyboardButton(text="📱 Отправить мой номер", request_contact=True)
+    markup.add(contact_btn)
+
+    msg = bot.send_message(
+        message.chat.id,
+        "Отлично! Нажмите кнопку ниже, чтобы быстро поделиться номером телефона, или введите его вручную:",
+        reply_markup=markup
+    )
     bot.register_next_step_handler(msg, get_phone)
 
 
 def get_phone(message):
     chat_id = message.chat.id
     name = user_data[chat_id]["name"]
-    phone = message.text
+
+    if message.contact is not None:
+        phone = message.contact.phone_number
+    else:
+        phone = message.text
 
     services_names = {
         "art": "Сейталиев Арт",
@@ -118,11 +131,16 @@ def get_phone(message):
         "school": "Школьные предметы",
         "aikido": "Айкидо"
     }
-    service_full_name = services_names.get(user_data[chat_id]["service"], "Неизвестно")
+    service_full_name = services_names.get(user_data[chat_id].get("service", ""), "Неизвестно")
 
     save_data("Telegram", name, phone, service_full_name)
 
-    bot.send_message(chat_id, "Спасибо! Ваша заявка принята. Наш администратор скоро свяжется с вами.")
+    remove_markup = types.ReplyKeyboardRemove()
+    bot.send_message(
+        chat_id,
+        "Спасибо! Ваша заявка принята. Наш администратор скоро свяжется с вами.",
+        reply_markup=remove_markup
+    )
     user_data.pop(chat_id, None)
 
 
