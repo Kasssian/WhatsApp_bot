@@ -10,7 +10,7 @@ load_dotenv()
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1mYOoN2ni9agEdAMogONUw9gn59xqVhaCJwcwkfOasP4/edit"
 JSON_KEYITILE = "service_account.json"
-
+MANAGER_ID = os.getenv("MANAGER_ID")
 TG_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 
@@ -39,6 +39,33 @@ init_db()
 def send_admin_alert(platform, name, phone, service):
     if not TG_TOKEN or not ADMIN_ID:
         print("Не настроен ADMIN_ID или Token, уведомление не отправлено.")
+        return
+
+    text = (
+        f"<b>НОВАЯ ЗАЯВКА!</b>\n\n"
+        f"<b>Имя:</b> {name}\n"
+        f"<b>Телефон:</b> {phone}\n"
+        f"<b>Услуга:</b> {service}\n"
+        f"<b>Источник:</b> {platform}"
+    )
+
+    url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+    data = {
+        "chat_id": ADMIN_ID,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+
+    try:
+        requests.post(url, json=data)
+        print("Уведомление админу отправлено")
+    except Exception as e:
+        print(f"Ошибка отправки уведомления: {e}")
+
+
+def send_manager_alert(platform, name, phone, service):
+    if not TG_TOKEN or not MANAGER_ID:
+        print("Не настроен MANAGER_ID или Token, уведомление не отправлено.")
         return
 
     text = (
