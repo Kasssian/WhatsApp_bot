@@ -1,6 +1,5 @@
 import os
 import sqlite3
-from datetime import datetime
 
 import gspread
 import requests
@@ -65,19 +64,24 @@ def send_admin_alert(platform, name, phone, service):
 
 
 def save_data(platform, name, phone, service):
+    from datetime import datetime
+
     date_now = datetime.now().strftime("%d.%m.%Y %H:%M")
     week_number = datetime.now().isocalendar()[1]
+    week_str = f"Неделя {week_number}"
 
-    row_data = [date_now, f"Неделя {week_number}", platform, name, phone, service]
+    sqlite_data = (date_now, platform, name, phone, service)
 
+    gsheets_data = [date_now, week_str, platform, name, phone, service]
 
     try:
-        conn = sqlite3.connect('bot_database.db', check_same_thread=False)
+        import sqlite3
+        conn = sqlite3.connect('bot_database.db')
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO requests (date, platform, name, phone, service) VALUES (?, ?, ?, ?, ?)", row_data)
+        cursor.execute("INSERT INTO requests (date, platform, name, phone, service) VALUES (?, ?, ?, ?, ?)",
+                       sqlite_data)
         conn.commit()
         conn.close()
-        print(f"[{platform}] Сохранено в БД: {name}")
     except Exception as e:
         print(f"Ошибка БД: {e}")
 
@@ -85,9 +89,8 @@ def save_data(platform, name, phone, service):
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_KEYITILE, scope)
         client = gspread.authorize(creds)
-
         sheet = client.open_by_url(SHEET_URL).sheet1
-        sheet.append_row(row_data)
+        sheet.append_row(gsheets_data)
         print(f"[{platform}] Сохранено в Google Sheets")
     except Exception as e:
         print(f"Ошибка Google Sheets: {e}")
