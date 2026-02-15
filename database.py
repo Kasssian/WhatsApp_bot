@@ -66,7 +66,10 @@ def send_admin_alert(platform, name, phone, service):
 
 def save_data(platform, name, phone, service):
     date_now = datetime.now().strftime("%d.%m.%Y %H:%M")
-    row_data = [date_now, platform, name, phone, service]
+    week_number = datetime.now().isocalendar()[1]
+
+    row_data = [date_now, f"Неделя {week_number}", platform, name, phone, service]
+
 
     try:
         conn = sqlite3.connect('bot_database.db', check_same_thread=False)
