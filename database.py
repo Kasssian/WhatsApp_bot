@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from datetime import datetime
 
 import gspread
 import requests
@@ -10,9 +11,11 @@ load_dotenv()
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1mYOoN2ni9agEdAMogONUw9gn59xqVhaCJwcwkfOasP4/edit"
 JSON_KEYITILE = "service_account.json"
-MANAGER_ID = os.getenv("MANAGER_ID")
 TG_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
+
+managers_str = os.getenv("MANAGER_IDS", "")
+MANAGER_IDS = [m_id.strip() for m_id in managers_str.split(",") if m_id.strip()]
 
 
 def init_db():
@@ -36,9 +39,19 @@ def init_db():
 init_db()
 
 
-def send_admin_alert(platform, name, phone, service):
-    if not TG_TOKEN or not ADMIN_ID:
-        print("Не настроен ADMIN_ID или Token, уведомление не отправлено.")
+def send_alert_to_all(platform, name, phone, service):
+    if not TG_TOKEN:
+        print("Ошибка: Нет TG_TOKEN")
+        return
+
+    recipients = set()
+    if ADMIN_ID:
+        recipients.add(ADMIN_ID)
+    for m_id in MANAGER_IDS:
+        recipients.add(m_id)
+
+    if not recipients:
+        print("Нет получателей для уведомления (проверьте .env)")
         return
 
     text = (
@@ -50,49 +63,21 @@ def send_admin_alert(platform, name, phone, service):
     )
 
     url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
-    data = {
-        "chat_id": ADMIN_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
 
-    try:
-        requests.post(url, json=data)
-        print("Уведомление админу отправлено")
-    except Exception as e:
-        print(f"Ошибка отправки уведомления: {e}")
-
-
-def send_manager_alert(platform, name, phone, service):
-    if not TG_TOKEN or not MANAGER_ID:
-        print("Не настроен MANAGER_ID или Token, уведомление не отправлено.")
-        return
-
-    text = (
-        f"<b>НОВАЯ ЗАЯВКА!</b>\n\n"
-        f"<b>Имя:</b> {name}\n"
-        f"<b>Телефон:</b> {phone}\n"
-        f"<b>Услуга:</b> {service}\n"
-        f"<b>Источник:</b> {platform}"
-    )
-
-    url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
-    data = {
-        "chat_id": ADMIN_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
-
-    try:
-        requests.post(url, json=data)
-        print("Уведомление админу отправлено")
-    except Exception as e:
-        print(f"Ошибка отправки уведомления: {e}")
+    for chat_id in recipients:
+        data = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML"
+        }
+        try:
+            requests.post(url, json=data)
+            print(f"Уведомление отправлено пользователю: {chat_id}")
+        except Exception as e:
+            print(f"Ошибка отправки пользователю {chat_id}: {e}")
 
 
 def save_data(platform, name, phone, service):
-    from datetime import datetime
-
     date_now = datetime.now().strftime("%d.%m.%Y %H:%M")
     week_number = datetime.now().isocalendar()[1]
     week_str = f"Неделя {week_number}"
@@ -102,7 +87,6 @@ def save_data(platform, name, phone, service):
     gsheets_data = [date_now, week_str, platform, name, phone, service]
 
     try:
-        import sqlite3
         conn = sqlite3.connect('bot_database.db')
         cursor = conn.cursor()
         cursor.execute("INSERT INTO requests (date, platform, name, phone, service) VALUES (?, ?, ?, ?, ?)",
@@ -122,4 +106,4 @@ def save_data(platform, name, phone, service):
     except Exception as e:
         print(f"Ошибка Google Sheets: {e}")
 
-    send_admin_alert(platform, name, phone, service)
+    send_alert_to_all(platform, name, phone, service)
