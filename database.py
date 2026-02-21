@@ -13,6 +13,8 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/1mYOoN2ni9agEdAMogONUw9gn59x
 JSON_KEYITILE = "service_account.json"
 TG_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
+MANAGER_ART = os.getenv("MANAGER_ART")
+MANAGER_ORT = os.getenv("MANAGER_ORT")
 
 managers_str = os.getenv("MANAGER_IDS", "")
 MANAGER_IDS = [m_id.strip() for m_id in managers_str.split(",") if m_id.strip()]
@@ -39,7 +41,7 @@ def init_db():
 init_db()
 
 
-def send_alert_to_all(platform, name, phone, service):
+def send_smart_alert(platform, name, phone, service):
     if not TG_TOKEN:
         print("Ошибка: Нет TG_TOKEN")
         return
@@ -47,19 +49,25 @@ def send_alert_to_all(platform, name, phone, service):
     recipients = set()
     if ADMIN_ID:
         recipients.add(ADMIN_ID)
-    for m_id in MANAGER_IDS:
-        recipients.add(m_id)
+
+    if service in ["Сейталиев Арт", "Айкидо"]:
+        if MANAGER_ART:
+            recipients.add(MANAGER_ART)
+
+    elif service in ["ОРТ Vector", "Школьные предметы", "Языки"]:
+        if MANAGER_ORT:
+            recipients.add(MANAGER_ORT)
 
     if not recipients:
         print("Нет получателей для уведомления (проверьте .env)")
         return
 
     text = (
-        f"<b>НОВАЯ ЗАЯВКА!</b>\n\n"
-        f"<b>Имя:</b> {name}\n"
-        f"<b>Телефон:</b> {phone}\n"
-        f"<b>Услуга:</b> {service}\n"
-        f"<b>Источник:</b> {platform}"
+        f"<b>🔔 НОВАЯ ЗАЯВКА!</b>\n\n"
+        f"<b>👤 Имя:</b> {name}\n"
+        f"<b>📱 Телефон:</b> {phone}\n"
+        f"<b>📝 Услуга:</b> {service}\n"
+        f"<b>🌐 Источник:</b> {platform}"
     )
 
     url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
@@ -106,4 +114,4 @@ def save_data(platform, name, phone, service):
     except Exception as e:
         print(f"Ошибка Google Sheets: {e}")
 
-    send_alert_to_all(platform, name, phone, service)
+    send_smart_alert(platform, name, phone, service)
