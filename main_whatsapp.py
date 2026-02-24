@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import requests
 import os
 from dotenv import load_dotenv
+from ai_handler import get_ai_response
 from database import save_data
 
 load_dotenv()
@@ -11,122 +12,6 @@ WA_TOKEN = os.getenv("WHATSAPP_TOKEN")
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
-user_state = {}
-
-TEXTS = {
-    "greeting": "Саламатсызбы! Илим жана Искусство борборуна кош келиңиз.\nСураныч, тейлөө тилин тандаңыз:\n\n"
-                "Вас приветствует Центр Наук и Искусств.\nПожалуйста, выберете язык общения:\n\n"
-                "1️⃣ Кыргыз тили\n"
-                "2️⃣ Русский язык\n\n"
-                "*(Отправьте цифру 1 или 2)*",
-
-    "ru": {
-        "menu": "Пожалуйста, выберите, что вас интересует (отправьте цифру):\n\n"
-                "1️⃣ Сейталиев Арт (Рисование)\n"
-                "2️⃣ ОРТ Vector\n"
-                "3️⃣ Языковые курсы\n"
-                "4️⃣ Школьные предметы\n"
-                "5️⃣ Айкидо",
-
-        "art": "Вас приветствует Центр Наук и Искусств – студия Сейталиев Арт.\n\n"
-               "Наша студия предлагает Вам:\n"
-               "• Эстетический курс для детей с 6 до 12 лет для развития вкуса и воображения.\n"
-               "• Академический рисунок — база: пропорции, штрих, перспектива, для подростков и взрослых.\n"
-               "• Академический рисунок для поступающих — подготовка к экзаменам.\n"
-               "• Живопись — работа с цветом и материалами. Композиция.\n"
-               "• Рисование на планшете.\n"
-               "• Мастер-классы для детей и взрослых — формат одного занятия.\n\n"
-               "С нашими профессиональными педагогами вы сможете добиться лучших результатов!",
-
-        "ort": "Вас приветствует Центр Наук и Искусств – проект Vector.\n\n"
-               "Наш Центр предлагает Вам видеокурсы ОРТ, онлайн и офлайн курсы ОРТ. Вы можете выбрать:\n"
-               "• Пакет 1 (МР-1): математика/русский язык\n"
-               "• Пакет 2 (МРБХ-1): математика/русский/биология/химия\n"
-               "• Пакет 3 (МРФ-1): математика/русский/физика\n"
-               "• Пакет 4 (МРА-1): мат/рус/английский\n"
-               "• Пакет 5 (М-1): математика на русском\n"
-               "• Пакет 6 (Р-1): русский язык\n"
-               "• Пакет 7 (БХ-1): биология/химия",
-
-        "lang": "Вас приветствует Центр Наук и Искусств.\n\n"
-                "Наш Центр предлагает Вам языковые курсы в группах и индивидуально по:\n"
-                "🇬🇧 Английскому языку\n"
-                "🇰🇬 Кыргызскому языку\n"
-                "🇩🇪 Немецкому языку\n"
-                "🇷🇺 Русскому языку",
-
-        "school": "Наш Центр предлагает Вам подтянуть в группах и индивидуально математику, физику, химию и биологию.\n\n"
-                  "С нашими преподавателями вы сможете добиться лучших результатов.",
-
-        "aikido": "Вас приветствует Федерация Айкидо Кыргызской Республики.\n\n"
-                  "Мы предлагаем тренировки для детей и взрослых. Наши залы находятся:\n"
-                  "📍 В здании Цирка\n"
-                  "📍 ул. Советская / ул. Боконбаева\n"
-                  "📍 Спортзал БГУ\n"
-                  "📍 Политех\n"
-                  "📍 Школа №60\n"
-                  "📍 ул. Ахунбаева / ул. Матросова\n"
-                  "📍 7 микрорайон, ДСК",
-
-        "ask_name": "Для получения полной информации и записи, пожалуйста, напишите ваше Имя:",
-        "thanks": "Спасибо! Ваша заявка принята. Наш специалист скоро свяжется с вами для подробной консультации.",
-        "error_digit": "Пожалуйста, отправьте правильную цифру из меню."
-    },
-
-    "kg": {
-        "menu": "Сураныч, сизди кызыктырган багытты тандаңыз (санды жөнөтүңүз):\n\n"
-                "1️⃣ Сейталиев Арт (Сүрөт тартуу)\n"
-                "2️⃣ ЖРТ (ОРТ) Vector\n"
-                "3️⃣ Тил курстары\n"
-                "4️⃣ Мектеп сабактары\n"
-                "5️⃣ Айкидо",
-
-        "art": "Илим жана Искусство борборундагы – “Сейталиев Арт” студиясына кош келдиңиз.\n\n"
-               "Биздин студия сизге төмөндөгүлөрдү сунуштайт:\n"
-               "• 6 жаштан 12 жашка чейинки балдар үчүн эстетикалык табитти өстүрүүчү курс.\n"
-               "• Академиялык сүрөт тартуу — негизги база: пропорция, штрих, перспектива.\n"
-               "• Жогорку окуу жайга тапшыруучулар үчүн — экзаменге даярдык.\n"
-               "• Живопись — түстөр жана материалдар менен иштөө.\n"
-               "• Планшетте сүрөт тартуу.\n"
-               "• Балдар жана чоңдор үчүн мастер-класстар.\n\n"
-               "Биздин кесипкөй педагогдор менен мыкты жыйынтыктарга жете аласыздар!",
-
-        "ort": "Илим жана Искусство борборундагы – Вектор ЖРТга даярдоо курсуна кош келиңиз.\n\n"
-               "Биз сизге ЖРТга даярдоочу видеосабак жана онлайн/офлайн курстарын сунуштайбыз:\n"
-               "• 1-пакет (МК-1): математика/кыргыз тили\n"
-               "• 2-пакет (МКБХ-1): математика/кыргыз тили/биология/химия\n"
-               "• 3-пакет (МКФ-1): математика/кыргыз тили/физика\n"
-               "• 4-пакет (МКА-1): математика/кыргыз/англис\n"
-               "• 5-пакет (М-1): математика гана\n"
-               "• 6-пакет (К-1): кыргыз тили гана\n"
-               "• 7-пакет (БХ-1): биология/химия",
-
-        "lang": "Илим жана Искусство борборуна кош келиңиз.\n\n"
-                "Биз сизге төмөнкү тил курстарын группа жана жеке форматта сунуштайбыз:\n"
-                "🇬🇧 Англис тили\n"
-                "🇰🇬 Кыргыз тили\n"
-                "🇩🇪 Немец тили\n"
-                "🇷🇺 Орус тили",
-
-        "school": "Биздин борбор сизге математика, физика, химия жана биология сабактарын группада жана жеке форматта тереңдетип окууну сунуштайт.\n\n"
-                  "Биздин мугалимдер менен сиз эң жакшы жыйынтыктарга жете аласыз.",
-
-        "aikido": "Кыргыз Республикасынын Айкидо федерациясына кош келиңиз.\n\n"
-                  "Биз балдар жана чоңдор үчүн машыгууларды сунуштайбыз. Биздин залдар:\n"
-                  "📍 Цирктин имаратында\n"
-                  "📍 Совет / Бөкөнбаев көчөлөрү\n"
-                  "📍 БГУнун спортзалы\n"
-                  "📍 Политех\n"
-                  "📍 №60 мектеп\n"
-                  "📍 Ахунбаев / Матросов көчөлөрү\n"
-                  "📍 7-микрорайон, ДСК",
-
-        "ask_name": "Толук маалымат алуу жана жазылуу үчүн Атыңызды жазыңыз:",
-        "thanks": "Ыраазычылык билдиребиз! Сиздин билдирүүңүз кабыл алынды. Толук маалымат берүү үчүн биздин адис сизге байланышка чыгат.",
-        "error_digit": "Сураныч, менюдан туура санды жөнөтүңүз."
-    }
-}
-
 
 def send_message(to_number, text):
     url = f"https://graph.facebook.com/v17.0/{PHONE_NUMBER_ID}/messages"
@@ -134,88 +19,15 @@ def send_message(to_number, text):
         "Authorization": f"Bearer {WA_TOKEN}",
         "Content-Type": "application/json"
     }
-    data = {
-        "messaging_product": "whatsapp",
-        "to": to_number,
-        "type": "text",
-        "text": {"body": text}
-    }
+    data = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": text}}
     requests.post(url, headers=headers, json=data)
-
-
-def process_message(wa_id, text):
-    text = text.strip()
-
-    if wa_id not in user_state:
-        user_state[wa_id] = {"step": "CHOOSE_LANG"}
-        send_message(wa_id, TEXTS["greeting"])
-        return
-
-    step = user_state[wa_id]["step"]
-
-    if step == "CHOOSE_LANG":
-        if text == "1":
-            user_state[wa_id]["lang"] = "kg"
-            user_state[wa_id]["step"] = "CHOOSE_SERVICE"
-            send_message(wa_id, TEXTS["kg"]["menu"])
-        elif text == "2":
-            user_state[wa_id]["lang"] = "ru"
-            user_state[wa_id]["step"] = "CHOOSE_SERVICE"
-            send_message(wa_id, TEXTS["ru"]["menu"])
-        else:
-            send_message(wa_id, "Пожалуйста, отправьте 1 или 2.\nСураныч, 1 же 2 санын жөнөтүңүз.")
-
-    elif step == "CHOOSE_SERVICE":
-        lang = user_state[wa_id]["lang"]
-
-        service_map = {
-            "1": "art",
-            "2": "ort",
-            "3": "lang",
-            "4": "school",
-            "5": "aikido"
-        }
-
-        if text in service_map:
-            s_key = service_map[text]
-            user_state[wa_id]["service"] = s_key
-            user_state[wa_id]["step"] = "ENTER_NAME"
-
-            msg = f"{TEXTS[lang][s_key]}\n\n{TEXTS[lang]['ask_name']}"
-            send_message(wa_id, msg)
-        else:
-            send_message(wa_id, TEXTS[lang]["error_digit"])
-
-    elif step == "ENTER_NAME":
-        lang = user_state[wa_id]["lang"]
-        name = text
-        phone = wa_id
-        service_key = user_state[wa_id]["service"]
-
-        services_names = {
-            "art": "Сейталиев Арт",
-            "ort": "ОРТ Vector",
-            "lang": "Языки",
-            "school": "Школьные предметы",
-            "aikido": "Айкидо"
-        }
-        service_full_name = services_names.get(service_key, "Неизвестно")
-
-        save_data("WhatsApp", name, phone, service_full_name)
-
-        send_message(wa_id, TEXTS[lang]["thanks"])
-
-        del user_state[wa_id]
 
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'GET':
-        mode = request.args.get("hub.mode")
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            return challenge, 200
+        if request.args.get("hub.verify_token") == VERIFY_TOKEN:
+            return request.args.get("hub.challenge"), 200
         return "Forbidden", 403
 
     if request.method == 'POST':
@@ -224,10 +36,26 @@ def webhook():
             message_info = data['entry'][0]['changes'][0]['value']['messages'][0]
             wa_id = message_info['from']
             text = message_info['text']['body']
-            process_message(wa_id, text)
+
+            ai_reply = get_ai_response(wa_id, text)
+
+            if "||ЗАЯВКА:" in ai_reply:
+                try:
+                    secret_line = ai_reply.split("||ЗАЯВКА:")[1].split("||")[0].strip()
+                    data_parts = secret_line.split(",")
+                    name = data_parts[0].strip()
+                    service = data_parts[2].strip()
+
+                    save_data("WhatsApp", name, wa_id, service)
+
+                    ai_reply = ai_reply.split("||ЗАЯВКА:")[0].strip()
+                except Exception as e:
+                    print(f"Ошибка парсинга заявки WA: {e}")
+
+            send_message(wa_id, ai_reply)
+
         except KeyError:
             pass
-
         return jsonify({"status": "ok"}), 200
 
 
