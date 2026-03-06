@@ -19,6 +19,7 @@ def handle_message(message):
 
     if "||ЗАЯВКА:" in ai_reply:
         try:
+            # Вытаскиваем данные клиента
             secret_line = ai_reply.split("||ЗАЯВКА:")[1].split("||")[0].strip()
             data_parts = secret_line.split(",")
 

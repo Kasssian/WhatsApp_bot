@@ -1,12 +1,10 @@
 import os
-
+import google.generativeai as genai
 from dotenv import load_dotenv
-from openai import OpenAI
 
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-conversations = {}
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 SYSTEM_PROMPT = """Ты вежливый, заботливый и профессиональный менеджер-консультант образовательного центра "Илим жана Искусство борбору" (студия Сейталиев Арт, курсы Vector ОРТ, Айкидо).
 Твоя задача — консультировать клиентов, отвечать на вопросы, узнавать детали (возраст ребенка) и подводить их к оставлению заявки.
@@ -26,27 +24,25 @@ SYSTEM_PROMPT = """Ты вежливый, заботливый и професс
 ||ЗАЯВКА: Имя клиента, Номер телефона, Название услуги||
 (Например: ||ЗАЯВКА: Нурлан, +996555123456, Сейталиев Арт||)"""
 
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-flash",
+    system_instruction=SYSTEM_PROMPT
+)
+
+conversations = {}
+
 
 def get_ai_response(user_id, user_text):
+
     if user_id not in conversations:
-        conversations[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        conversations[user_id] = model.start_chat(history=[])
 
-    conversations[user_id].append({"role": "user", "content": user_text})
-
-    if len(conversations[user_id]) > 12:
-        conversations[user_id] = [conversations[user_id][0]] + conversations[user_id][-11:]
+    chat = conversations[user_id]
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=conversations[user_id],
-            temperature=0.7
-        )
-        bot_reply = response.choices[0].message.content
-
-        conversations[user_id].append({"role": "assistant", "content": bot_reply})
-        return bot_reply
+        response = chat.send_message(user_text)
+        return response.text
 
     except Exception as e:
-        print(f"Ошибка OpenAI: {e}")
+        print(f"Ошибка Gemini: {e}")
         return "Извините, сейчас я немного перегружен. Пожалуйста, подождите минутку и напишите снова. 🙏"

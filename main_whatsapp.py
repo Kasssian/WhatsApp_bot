@@ -1,63 +1,73 @@
-from flask import Flask, request, jsonify
-import requests
 import os
+
+import requests
 from dotenv import load_dotenv
+from flask import Flask, request, jsonify
+
 from ai_handler import get_ai_response
 from database import save_data
 
 load_dotenv()
 app = Flask(__name__)
 
-WA_TOKEN = os.getenv("WHATSAPP_TOKEN")
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
+ID_INSTANCE = os.getenv("GREEN_API_ID")
+API_TOKEN_INSTANCE = os.getenv("GREEN_API_TOKEN")
 
 
-def send_message(to_number, text):
-    url = f"https://graph.facebook.com/v17.0/{PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WA_TOKEN}",
-        "Content-Type": "application/json"
+def send_message(chat_id, text):
+    url = f"https://api.green-api.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN_INSTANCE}"
+    payload = {
+        "chatId": chat_id,
+        "message": text
     }
-    data = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": text}}
-    requests.post(url, headers=headers, json=data)
+    headers = {'Content-Type': 'application/json'}
+    try:
+        requests.post(url, json=payload, headers=headers)
+    except Exception as e:
+        print(f"Ошибка отправки WhatsApp: {e}")
 
 
-@app.route('/webhook', methods=['GET', 'POST'])
+@app.route('/webhook', methods=['POST'])
 def webhook():
-    if request.method == 'GET':
-        if request.args.get("hub.verify_token") == VERIFY_TOKEN:
-            return request.args.get("hub.challenge"), 200
-        return "Forbidden", 403
+    data = request.json
 
-    if request.method == 'POST':
-        data = request.json
-        try:
-            message_info = data['entry'][0]['changes'][0]['value']['messages'][0]
-            wa_id = message_info['from']
-            text = message_info['text']['body']
+    try:
+        if data['typeWebhook'] == 'incomingMessageReceived':
+            message_data = data['messageData']
 
-            ai_reply = get_ai_response(wa_id, text)
+            if message_data['typeMessage'] == 'textMessage':
+                chat_id = data['senderData']['chatId']  # Например: 996555123456@c.us
+                text = message_data['textMessageData']['textMessage']
 
-            if "||ЗАЯВКА:" in ai_reply:
-                try:
-                    secret_line = ai_reply.split("||ЗАЯВКА:")[1].split("||")[0].strip()
-                    data_parts = secret_line.split(",")
-                    name = data_parts[0].strip()
-                    service = data_parts[2].strip()
+                if chat_id == data['idInstance']:
+                    return jsonify({"status": "ignored"}), 200
 
-                    save_data("WhatsApp", name, wa_id, service)
+                ai_reply = get_ai_response(chat_id, text)
 
-                    ai_reply = ai_reply.split("||ЗАЯВКА:")[0].strip()
-                except Exception as e:
-                    print(f"Ошибка парсинга заявки WA: {e}")
+                if "||ЗАЯВКА:" in ai_reply:
+                    try:
+                        secret_line = ai_reply.split("||ЗАЯВКА:")[1].split("||")[0].strip()
+                        data_parts = secret_line.split(",")
+                        name = data_parts[0].strip()
+                        # Номер берем из chat_id (отрезаем @c.us в конце)
+                        phone = chat_id.split('@')[0]
+                        service = data_parts[2].strip()
 
-            send_message(wa_id, ai_reply)
+                        save_data("WhatsApp", name, phone, service)
 
-        except KeyError:
-            pass
-        return jsonify({"status": "ok"}), 200
+                        # Вырезаем секретный код из текста
+                        ai_reply = ai_reply.split("||ЗАЯВКА:")[0].strip()
+                    except Exception as e:
+                        print(f"Ошибка парсинга заявки WA: {e}")
+
+                send_message(chat_id, ai_reply)
+
+    except KeyError:
+        pass
+
+    return jsonify({"status": "ok"}), 200
 
 
 if __name__ == '__main__':
+    print("----- WhatsApp GREEN-API бот запущен... -----")
     app.run(host='0.0.0.0', port=5000)
