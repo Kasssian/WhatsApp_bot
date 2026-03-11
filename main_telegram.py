@@ -1,6 +1,8 @@
-import telebot
 import os
+
+import telebot
 from dotenv import load_dotenv
+
 from ai_handler import get_ai_response
 from database import save_data
 

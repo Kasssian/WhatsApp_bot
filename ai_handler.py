@@ -1,10 +1,13 @@
 import os
-import google.generativeai as genai
+import time
+
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 SYSTEM_PROMPT = """Ты вежливый, заботливый и профессиональный менеджер-консультант образовательного центра "Илим жана Искусство борбору" (студия Сейталиев Арт, курсы Vector ОРТ, Айкидо).
 Твоя задача — консультировать клиентов, отвечать на вопросы, узнавать детали (возраст ребенка) и подводить их к оставлению заявки.
@@ -24,25 +27,37 @@ SYSTEM_PROMPT = """Ты вежливый, заботливый и професс
 ||ЗАЯВКА: Имя клиента, Номер телефона, Название услуги||
 (Например: ||ЗАЯВКА: Нурлан, +996555123456, Сейталиев Арт||)"""
 
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    system_instruction=SYSTEM_PROMPT
-)
-
 conversations = {}
 
 
 def get_ai_response(user_id, user_text):
-
     if user_id not in conversations:
-        conversations[user_id] = model.start_chat(history=[])
+        conversations[user_id] = client.chats.create(
+            model="gemini-2.5-flash",
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.7,
+            )
+        )
 
     chat = conversations[user_id]
 
-    try:
-        response = chat.send_message(user_text)
-        return response.text
+    max_retries = 3
 
-    except Exception as e:
-        print(f"Ошибка Gemini: {e}")
-        return "Извините, сейчас я немного перегружен. Пожалуйста, подождите минутку и напишите снова. 🙏"
+    for attempt in range(max_retries):
+        try:
+            response = chat.send_message(user_text)
+            return response.text
+
+        except Exception as e:
+            error_msg = str(e)
+
+            if "429" in error_msg or "quota" in error_msg.lower():
+                print(f"[Внимание] Лимит запросов. Ждем 5 секунд... (Попытка {attempt + 1} из {max_retries})")
+                time.sleep(5)
+                continue
+            else:
+                print(f"Ошибка Gemini: {e}")
+                return "Извините, сейчас я немного перегружен. Пожалуйста, подождите минутку и напишите снова. 🙏"
+
+    return "Ой, у нас сейчас очень много обращений! 😅 Пожалуйста, подождите буквально минуту и продублируйте ваш вопрос."
