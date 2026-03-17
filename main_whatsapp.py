@@ -29,41 +29,45 @@ def send_message(chat_id, text):
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.json
-
     try:
-        if data['typeWebhook'] == 'incomingMessageReceived':
-            message_data = data['messageData']
+        data = request.json
 
-            if message_data['typeMessage'] == 'textMessage':
-                chat_id = data['senderData']['chatId']  # Например: 996555123456@c.us
-                text = message_data['textMessageData']['textMessage']
+        try:
+            if data['typeWebhook'] == 'incomingMessageReceived':
+                message_data = data['messageData']
 
-                if chat_id == data['idInstance']:
-                    return jsonify({"status": "ignored"}), 200
+                if message_data['typeMessage'] == 'textMessage':
+                    chat_id = data['senderData']['chatId']  # Например: 996555123456@c.us
+                    text = message_data['textMessageData']['textMessage']
 
-                ai_reply = get_ai_response(chat_id, text)
+                    if chat_id == data['idInstance']:
+                        return jsonify({"status": "ignored"}), 200
 
-                if "||ЗАЯВКА:" in ai_reply:
-                    try:
-                        secret_line = ai_reply.split("||ЗАЯВКА:")[1].split("||")[0].strip()
-                        data_parts = secret_line.split(",")
-                        name = data_parts[0].strip()
-                        # Номер берем из chat_id (отрезаем @c.us в конце)
-                        phone = chat_id.split('@')[0]
-                        service = data_parts[2].strip()
+                    ai_reply = get_ai_response(chat_id, text)
 
-                        save_data("WhatsApp", name, phone, service)
+                    if "||ЗАЯВКА:" in ai_reply:
+                        try:
+                            secret_line = ai_reply.split("||ЗАЯВКА:")[1].split("||")[0].strip()
+                            data_parts = secret_line.split(",")
+                            name = data_parts[0].strip()
+                            # Номер берем из chat_id (отрезаем @c.us в конце)
+                            phone = chat_id.split('@')[0]
+                            service = data_parts[2].strip()
 
-                        # Вырезаем секретный код из текста
-                        ai_reply = ai_reply.split("||ЗАЯВКА:")[0].strip()
-                    except Exception as e:
-                        print(f"Ошибка парсинга заявки WA: {e}")
+                            save_data("WhatsApp", name, phone, service)
 
-                send_message(chat_id, ai_reply)
+                            # Вырезаем секретный код из текста
+                            ai_reply = ai_reply.split("||ЗАЯВКА:")[0].strip()
+                        except Exception as e:
+                            print(f"Ошибка парсинга заявки WA: {e}")
 
-    except KeyError:
-        pass
+                    send_message(chat_id, ai_reply)
+
+        except KeyError:
+            pass
+
+    except Exception as e:
+        print(f"Критическая ошибка вебхука: {e}")
 
     return jsonify({"status": "ok"}), 200
 
