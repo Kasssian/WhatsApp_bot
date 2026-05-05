@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 
 import requests
 from dotenv import load_dotenv
@@ -13,61 +15,103 @@ app = Flask(__name__)
 ID_INSTANCE = os.getenv("GREEN_API_ID")
 API_TOKEN_INSTANCE = os.getenv("GREEN_API_TOKEN")
 
+muted_chats = {}
+MUTE_DURATION = 1800
+
 
 def send_message(chat_id, text):
-    url = f"https://api.green-api.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN_INSTANCE}"
+    url = "http://127.0.0.1:3000/send"
+
     payload = {
         "chatId": chat_id,
         "message": text
     }
     headers = {'Content-Type': 'application/json'}
     try:
-        requests.post(url, json=payload, headers=headers)
+        resp = requests.post(url, json=payload, headers=headers)
+        print(f"Ответ отправлен в WA (Статус: {resp.status_code})")
     except Exception as e:
         print(f"Ошибка отправки WhatsApp: {e}")
+
+
+def process_and_send(chat_id, text):
+    print(f"Текст от клиента {chat_id}: {text}")
+    ai_reply = get_ai_response(chat_id, text)
+
+    if "||ЗАЯВКА:" in ai_reply:
+        try:
+            secret_line = ai_reply.split("||ЗАЯВКА:")[1].split("||")[0].strip()
+            data_parts = secret_line.split(",")
+            name = data_parts[0].strip()
+            phone = chat_id.split('@')[0]
+            service = data_parts[2].strip()
+
+            save_data("WhatsApp", name, phone, service)
+            print(f"✅ Заявка сохранена в базу: {name}")
+
+            ai_reply = ai_reply.split("||ЗАЯВКА:")[0].strip()
+        except Exception as e:
+            print(f"❌ Ошибка парсинга заявки WA: {e}")
+
+    send_message(chat_id, ai_reply)
 
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         data = request.json
+        if not data:
+            print("[ВЕБХУК] ⚠️ Получен пустой запрос.")
+            return jsonify({"status": "ok"}), 200
 
-        try:
-            if data['typeWebhook'] == 'incomingMessageReceived':
-                message_data = data['messageData']
+        type_webhook = data.get('typeWebhook')
+        print(f"\n[ВЕБХУК] 📥 Новое событие: {type_webhook}")
 
-                if message_data['typeMessage'] == 'textMessage':
-                    chat_id = data['senderData']['chatId']  # Например: 996555123456@c.us
-                    text = message_data['textMessageData']['textMessage']
+        if type_webhook == 'outgoingMessageReceived':
+            chat_id = data['senderData']['chatId']
+            muted_chats[chat_id] = time.time()
+            print(f"[ВЕБХУК] 🤫 Обнаружен ответ менеджера. Чат {chat_id} замолчит на 30 минут.")
+            return jsonify({"status": "muted"}), 200
 
-                    if chat_id == data['idInstance']:
-                        return jsonify({"status": "ignored"}), 200
+        if type_webhook == 'incomingMessageReceived':
+            chat_id = data['senderData']['chatId']
+            message_data = data.get('messageData', {})
+            type_message = message_data.get('typeMessage')
 
-                    ai_reply = get_ai_response(chat_id, text)
+            print(f"[ВЕБХУК] 📨 Сообщение от {chat_id} (тип: {type_message})")
 
-                    if "||ЗАЯВКА:" in ai_reply:
-                        try:
-                            secret_line = ai_reply.split("||ЗАЯВКА:")[1].split("||")[0].strip()
-                            data_parts = secret_line.split(",")
-                            name = data_parts[0].strip()
-                            # Номер берем из chat_id (отрезаем @c.us в конце)
-                            phone = chat_id.split('@')[0]
-                            service = data_parts[2].strip()
+            text = ""
+            if type_message == 'textMessage':
+                text = message_data['textMessageData']['textMessage']
+            elif type_message == 'extendedTextMessage':
+                text = message_data['extendedTextMessageData']['text']
 
-                            save_data("WhatsApp", name, phone, service)
+            if text:
+                print(f"[ВЕБХУК] 💬 Текст сообщения: {text}")
 
-                            # Вырезаем секретный код из текста
-                            ai_reply = ai_reply.split("||ЗАЯВКА:")[0].strip()
-                        except Exception as e:
-                            print(f"Ошибка парсинга заявки WA: {e}")
+                if chat_id == data.get('idInstance'):
+                    print("[ВЕБХУК] ⏭️ Сообщение от самого себя. Игнорируем.")
+                    return jsonify({"status": "ignored"}), 200
 
-                    send_message(chat_id, ai_reply)
+                if chat_id in muted_chats:
+                    time_passed = time.time() - muted_chats[chat_id]
+                    if time_passed > MUTE_DURATION:
+                        del muted_chats[chat_id]
+                        print(f"[ВЕБХУК] ✅ Время тишины для {chat_id} истекло.")
+                    else:
+                        remaining = int(MUTE_DURATION - time_passed)
+                        print(f"[ВЕБХУК] 🙊 Бот промолчал: {chat_id} в списке тишины (еще {remaining} сек.)")
+                        return jsonify({"status": "ignored_due_to_mute"}), 200
 
-        except KeyError:
-            pass
+                print(f"[ВЕБХУК] ⚙️ Запускаю поток обработки для {chat_id}...")
+                thread = threading.Thread(target=process_and_send, args=(chat_id, text))
+                thread.start()
+                print(f"[ВЕБХУК] 🚀 Поток успешно стартовал.")
+            else:
+                print("[ВЕБХУК] 🖼️ Получено нетекстовое сообщение (картинка/файл). Бот пока не умеет их читать.")
 
     except Exception as e:
-        print(f"Критическая ошибка вебхука: {e}")
+        print(f"❌ [ОШИБКА ВЕБХУКА]: {e}")
 
     return jsonify({"status": "ok"}), 200
 
