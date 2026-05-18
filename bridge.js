@@ -13,10 +13,10 @@ const client = new Client({
     qrMaxRetries: 15,
     authTimeoutMs: 180000,
     puppeteer: {
-        executablePath: '/usr/bin/chromium-browser',
+        executablePath: "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Edge.lnk",
         handleSIGINT: false,
-        browserWSEndpoint: null,
-        protocolTimeout: 120000,
+        timeout: 300000,
+        protocolTimeout: 300000,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -26,7 +26,16 @@ const client = new Client({
             '--no-zygote',
             '--single-process',
             '--disable-gpu',
-            '--disable-extensions'
+            '--disable-extensions',
+            '--disable-canvas-aa',
+            '--disable-2d-canvas-clip-aa',
+            '--disable-gl-drawing-for-tests',
+            '--disable-renderer-backgrounding',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-breakpad',
+            '--disable-component-update',
+            '--memory-pressure-off'
         ]
     }
 });
