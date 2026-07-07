@@ -42,12 +42,15 @@ def process_and_send(chat_id, text):
         try:
             secret_line = ai_reply.split("||ЗАЯВКА:")[1].split("||")[0].strip()
             data_parts = secret_line.split(",")
+
             name = data_parts[0].strip()
-            phone = chat_id.split('@')[0]
+
+            phone = data_parts[1].strip()
+
             service = data_parts[2].strip()
 
             save_data("WhatsApp", name, phone, service)
-            print(f"✅ Заявка сохранена в базу: {name}")
+            print(f"✅ Заявка сохранена в базу: {name}, {phone}, {service}")
 
             ai_reply = ai_reply.split("||ЗАЯВКА:")[0].strip()
         except Exception as e:
